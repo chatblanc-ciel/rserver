@@ -5,6 +5,9 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 mod dealer_error;
+mod http_def;
+
+use crate::web_dealer::http_def::HttpRequest;
 
 use self::dealer_error::DealerError;
 
@@ -61,11 +64,12 @@ impl WebDealer<()> {
     ///
     fn handle_connection(mut stream: TcpStream) {
         let mut buffer = [0; 1024];
-        stream.read(&mut buffer).unwrap();
+        let _ = stream.read(&mut buffer).unwrap();
+		let request = String::from_utf8_lossy(&buffer);
 
-        let get = b"GET / HTTP/1.1\r\n";
+        let root = format!("{}", HttpRequest::Get(String::from("/")));
 
-        let (status_line, filename) = if buffer.starts_with(get) {
+        let (status_line, filename) = if request.starts_with(&root) {
             ("HTTP/1.1 200 OK\r\n\r\n", "./static/top.html")
         } else {
             ("HTTP/1.1 404 NOT FOUND\r\n\r\n", "./static/404.html")
@@ -78,7 +82,7 @@ impl WebDealer<()> {
 
         let response = format!("{}{}", status_line, contents);
 
-        stream.write(response.as_bytes()).unwrap();
+        stream.write_all(response.as_bytes()).unwrap();
         stream.flush().unwrap();
     }
 }
