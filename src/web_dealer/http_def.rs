@@ -11,6 +11,7 @@ pub enum HttpRequestMethod {
     Options,
     Trace,
     Connect,
+    Unknown,
 }
 impl Display for HttpRequestMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -21,6 +22,11 @@ impl Display for HttpRequestMethod {
             Self::Delete => write!(f, "DELETE"),
             _ => unimplemented!(),
         }
+    }
+}
+impl Default for HttpRequestMethod {
+    fn default() -> Self {
+        Self::Unknown
     }
 }
 impl From<HttpRequestMethod> for String {
@@ -44,19 +50,73 @@ impl TryInto<HttpRequestMethod> for String {
 
 #[derive(Debug, Clone)]
 pub struct HttpRequest {
-    method: HttpRequestMethod,
-    target: String,
-    ver: String,
+    pub method: HttpRequestMethod,
+    pub target: String,
+    pub ver: String,
+    pub body: String,
+    pub remained_header: String,
+}
+impl Default for HttpRequest {
+    fn default() -> Self {
+        Self {
+            method: Default::default(),
+            target: Default::default(),
+            ver: Default::default(),
+            body: Default::default(),
+            remained_header: Default::default(),
+        }
+    }
+}
+impl TryInto<HttpRequest> for String {
+    type Error = HttpError;
+
+    fn try_into(self) -> Result<HttpRequest, Self::Error> {
+        // bodyとheaderの分解
+        let mut request = self
+            .split("\r\n\r\n")
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+        if request.len() != 2 {
+            return Err(HttpError::RequestIsBroken);
+        }
+        let body = request.pop().ok_or(HttpError::RequestIsBroken)?;
+
+        let request = request
+            .pop()
+            .ok_or(HttpError::RequestIsBroken)?
+            .split("\r\n")
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+        let request_first = request
+            .get(0)
+            .ok_or(HttpError::RequestIsBroken)?
+            .split(' ')
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
+        if request_first.len() != 3 {
+            return Err(HttpError::RequestIsBroken);
+        }
+
+        Ok(HttpRequest {
+            method: request_first[0].clone().try_into()?,
+            target: request_first[1].clone(),
+            ver: request_first[2].clone(),
+            body,
+            ..Default::default()
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
 pub enum HttpError {
     UndifineMethod,
+    RequestIsBroken,
 }
 impl Display for HttpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UndifineMethod => write!(f, "Http request method is undifined."),
+            Self::RequestIsBroken => write!(f, "Http request is broken so can't deserialize"),
         }
     }
 }
