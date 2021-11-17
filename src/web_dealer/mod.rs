@@ -87,7 +87,7 @@ impl WebDealer<()> {
 
                     filename = String::from(".");
                     if request[0].split(' ').collect::<Vec<&str>>()[1] == "/" {
-                        filename += &String::from("/static/top.html");
+                        filename += &String::from("/static/index.html");
                     } else {
                         filename += &request[0].split(' ').collect::<Vec<&str>>()[1].to_owned();
                     }
