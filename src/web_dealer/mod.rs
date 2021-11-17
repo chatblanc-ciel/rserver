@@ -1,13 +1,14 @@
 use std::fs::File;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 mod dealer_error;
 mod http_def;
 
-use crate::web_dealer::http_def::HttpRequest;
+use crate::web_dealer::http_def::{HttpRequestMethod};
 
 use self::dealer_error::DealerError;
 
@@ -16,8 +17,8 @@ use self::dealer_error::DealerError;
 /// working to deliver Http Response by analizing listened Http Request.
 ///
 pub struct WebDealer<T> {
-    listener: Arc<TcpListener>,
-    worker: JoinHandle<T>,
+    _listener: Arc<TcpListener>,
+    _worker: JoinHandle<T>,
 }
 impl WebDealer<()> {
     /// Generate ``WebDealer``.
@@ -45,9 +46,9 @@ impl WebDealer<()> {
         }
 
         // Second Step : Generate worker thread
-        let listener_cp = Arc::clone(&listener);
+        let _listener = Arc::clone(&listener);
         let thread = thread::spawn(move || {
-            for stream in listener_cp.incoming() {
+            for stream in listener.incoming() {
                 let stream = stream.unwrap();
 
                 Self::handle_connection(stream);
@@ -55,8 +56,8 @@ impl WebDealer<()> {
         });
 
         Ok(Self {
-            listener,
-            worker: thread,
+            _listener,
+            _worker: thread,
         })
     }
 
@@ -65,17 +66,44 @@ impl WebDealer<()> {
     fn handle_connection(mut stream: TcpStream) {
         let mut buffer = [0; 1024];
         let _ = stream.read(&mut buffer).unwrap();
-		let request = String::from_utf8_lossy(&buffer);
+        println!("{}", String::from_utf8_lossy(&buffer));
+        let request = String::from_utf8_lossy(&buffer)
+            .split("\r\n\r\n")
+            .map(|s| s.to_string())
+            .collect::<Vec<String>>();
 
-        let root = format!("{}", HttpRequest::Get(String::from("/")));
+        //        let root = format!("{}", HttpRequest::Get(String::from("/")));
 
-        let (status_line, filename) = if request.starts_with(&root) {
-            ("HTTP/1.1 200 OK\r\n\r\n", "./static/top.html")
+        let mut status_line = String::new();
+        let mut filename = String::new();
+
+        if let Ok(method) = request[0].split(' ').collect::<Vec<&str>>()[0]
+            .to_owned()
+            .try_into()
+        {
+            match method {
+                HttpRequestMethod::Get => {
+                    status_line = String::from("HTTP/1.1 200 OK\r\n\r\n");
+
+                    filename = String::from(".");
+                    if request[0].split(' ').collect::<Vec<&str>>()[1] == "/" {
+                        filename += &String::from("/static/top.html");
+                    } else {
+                        filename += &request[0].split(' ').collect::<Vec<&str>>()[1].to_owned();
+                    }
+                },
+                HttpRequestMethod::Post => {unimplemented!()},
+                _ => {}
+            }
         } else {
-            ("HTTP/1.1 404 NOT FOUND\r\n\r\n", "./static/404.html")
-        };
+            status_line = String::from("HTTP/1.1 404 NOT FOUND\r\n\r\n");
+            filename = String::from("./static/404.html");
+        }
 
-        let mut file = File::open(filename).unwrap();
+        let mut file = File::open(filename).unwrap_or_else(|_| {
+            status_line = String::from("HTTP/1.1 404 NOT FOUND\r\n\r\n");
+            File::open("./static/404.html").unwrap()
+        });
         let mut contents = String::new();
 
         file.read_to_string(&mut contents).unwrap();
