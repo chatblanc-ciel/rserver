@@ -108,15 +108,56 @@ impl TryInto<HttpRequest> for String {
 }
 
 #[derive(Debug, Clone)]
+pub enum HttpResponseState {
+    Complete, // `Ok` is Reserved word in Rust.
+    NotFound,
+}
+impl HttpResponseState {
+    pub fn code(&self) -> String {
+        match self {
+            Self::Complete => String::from("200"),
+            Self::NotFound => String::from("404"),
+        }
+    }
+}
+impl Display for HttpResponseState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Complete => write!(f, "OK"),
+            Self::NotFound => write!(f, "Not Found"),
+        }
+    }
+}
+#[derive(Debug, Clone)]
+pub struct HttpResponse {
+    pub state: HttpResponseState,
+    pub ver: String,
+    pub body: String,
+}
+impl From<HttpResponse> for String {
+    fn from(res: HttpResponse) -> Self {
+        format!(
+            "{} {} {}\r\n\r\n{}",
+            res.ver,
+            res.state.code(),
+            res.state,
+            res.body
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum HttpError {
     UndifineMethod,
     RequestIsBroken,
+    FailGetControl,
 }
 impl Display for HttpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UndifineMethod => write!(f, "Http request method is undifined."),
-            Self::RequestIsBroken => write!(f, "Http request is broken so can't deserialize"),
+            Self::RequestIsBroken => write!(f, "Http request is broken so can't deserialize."),
+            Self::FailGetControl => write!(f, "Http get request is failed."),
         }
     }
 }

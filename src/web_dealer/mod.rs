@@ -67,7 +67,7 @@ impl WebDealer<()> {
         let mut buffer = [0; 1024];
         let _ = stream.read(&mut buffer).unwrap();
         println!("{}", String::from_utf8_lossy(&buffer));
-        let request = String::from_utf8_lossy(&buffer)
+        let _request = String::from_utf8_lossy(&buffer)
             .split("\r\n\r\n")
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
@@ -76,40 +76,51 @@ impl WebDealer<()> {
             .to_string()
             .try_into()
             .unwrap();
-        let mut status_line = String::new();
-        let mut filename = String::new();
+        let _status_line = String::new();
+        let _filename = String::new();
 
-        match &request.method {
-            HttpRequestMethod::Get => {
-                status_line = format!("{} 200 OK\r\n\r\n", request.ver);
-
-                filename = String::from(".");
-                if request.target == "/" {
-                    filename += &String::from("/static/index.html");
-                } else {
-                    filename += &request.target;
-                }
-            }
+        let response = match &request.method {
+            HttpRequestMethod::Get => Self::get_handling(request.clone()),
             HttpRequestMethod::Post => {
                 unimplemented!()
             }
-            _ => {
-                status_line = format!("{} 404 NOT FOUND\r\n\r\n", request.ver);
-                filename = String::from("./static/404.html");
+            _ => Err(HttpError::UndifineMethod),
+        };
+
+        let response = response.unwrap_or_else(|_| {
+            let mut contents = String::new();
+            File::open("./static/404.html")
+                .unwrap()
+                .read_to_string(&mut contents)
+                .unwrap();
+
+            HttpResponse {
+                state: HttpResponseState::NotFound,
+                ver: request.ver,
+                body: contents,
             }
+        });
+        println!("{}", String::from(response.clone()));
+        stream.write_all(String::from(response).as_bytes()).unwrap();
+        stream.flush().unwrap();
+    }
+
+    fn get_handling(request: HttpRequest) -> Result<HttpResponse, HttpError> {
+        let mut filename = String::from(".");
+        if request.target == "/" {
+            filename += &String::from("/static/index.html");
+        } else {
+            filename += &request.target;
         }
 
-        let mut file = File::open(filename).unwrap_or_else(|_| {
-            status_line = format!("{} 404 NOT FOUND\r\n\r\n", request.ver);
-            File::open("./static/404.html").unwrap()
-        });
+        let mut file = File::open(filename).map_err(|_| HttpError::FailGetControl)?;
         let mut contents = String::new();
-
         file.read_to_string(&mut contents).unwrap();
 
-        let response = format!("{}{}", status_line, contents);
-
-        stream.write_all(response.as_bytes()).unwrap();
-        stream.flush().unwrap();
+        Ok(HttpResponse {
+            state: HttpResponseState::Complete,
+            ver: request.ver,
+            body: contents,
+        })
     }
 }
