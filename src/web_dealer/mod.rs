@@ -8,7 +8,7 @@ use std::thread::{self, JoinHandle};
 mod dealer_error;
 mod http_def;
 
-use crate::web_dealer::http_def::{HttpRequestMethod};
+use crate::web_dealer::http_def::*;
 
 use self::dealer_error::DealerError;
 
@@ -72,36 +72,35 @@ impl WebDealer<()> {
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
 
-        //        let root = format!("{}", HttpRequest::Get(String::from("/")));
-
+        let request: HttpRequest = String::from_utf8_lossy(&buffer)
+            .to_string()
+            .try_into()
+            .unwrap();
         let mut status_line = String::new();
         let mut filename = String::new();
 
-        if let Ok(method) = request[0].split(' ').collect::<Vec<&str>>()[0]
-            .to_owned()
-            .try_into()
-        {
-            match method {
-                HttpRequestMethod::Get => {
-                    status_line = String::from("HTTP/1.1 200 OK\r\n\r\n");
+        match &request.method {
+            HttpRequestMethod::Get => {
+                status_line = format!("{} 200 OK\r\n\r\n", request.ver);
 
-                    filename = String::from(".");
-                    if request[0].split(' ').collect::<Vec<&str>>()[1] == "/" {
-                        filename += &String::from("/static/index.html");
-                    } else {
-                        filename += &request[0].split(' ').collect::<Vec<&str>>()[1].to_owned();
-                    }
-                },
-                HttpRequestMethod::Post => {unimplemented!()},
-                _ => {}
+                filename = String::from(".");
+                if request.target == "/" {
+                    filename += &String::from("/static/index.html");
+                } else {
+                    filename += &request.target;
+                }
             }
-        } else {
-            status_line = String::from("HTTP/1.1 404 NOT FOUND\r\n\r\n");
-            filename = String::from("./static/404.html");
+            HttpRequestMethod::Post => {
+                unimplemented!()
+            }
+            _ => {
+                status_line = format!("{} 404 NOT FOUND\r\n\r\n", request.ver);
+                filename = String::from("./static/404.html");
+            }
         }
 
         let mut file = File::open(filename).unwrap_or_else(|_| {
-            status_line = String::from("HTTP/1.1 404 NOT FOUND\r\n\r\n");
+            status_line = format!("{} 404 NOT FOUND\r\n\r\n", request.ver);
             File::open("./static/404.html").unwrap()
         });
         let mut contents = String::new();
