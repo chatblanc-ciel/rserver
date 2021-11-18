@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum HttpRequestMethod {
     Get,
     Post,
@@ -107,7 +107,9 @@ impl TryInto<HttpRequest> for String {
     }
 }
 
-#[derive(Debug, Clone)]
+pub trait Response {}
+
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum HttpResponseState {
     Complete, // `Ok` is Reserved word in Rust.
     NotFound,
@@ -134,6 +136,7 @@ pub struct HttpResponse {
     pub ver: String,
     pub body: String,
 }
+impl Response for HttpResponse {}
 impl From<HttpResponse> for String {
     fn from(res: HttpResponse) -> Self {
         format!(
