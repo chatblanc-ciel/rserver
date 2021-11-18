@@ -1,7 +1,8 @@
 use rserver::web_dealer::WebDealer;
 
 fn main() {
-    let addr = String::from("127.0.0.1:8000");
+//    let addr = String::from("0.0.0.0:8000");      // In docker container
+    let addr = String::from("localhost:8080"); 
     let _dealer = WebDealer::new(&addr).unwrap();
 
     loop {
