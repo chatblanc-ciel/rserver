@@ -16,26 +16,39 @@
     <div class="container">
         <h1>actix-web example</h1>
         <h2>Memo form</h2>
-        <form class="form-horizontal" id="simpleForm" method="POST" action="/form/memo">
             <div class="form-group">
                 <label for="content">Content</label>
                 <input type="text" name="content" id="content" class="form-control">
             </div>
-            <button type="submit" class="btn btn-primary">Post</button>
-        </form>
+            <button type="button" class="btn btn-primary" onclick="post_method('content', '/form/memo');">Post</button>
         <h2>Memo list</h2>
         <table class="table">
             <thead>
                 <tr>
                     <th scope="col">id</th>
                     <th scope="col">content</th>
+                    <th scope="col"></th>
+                    <th scope="col">input content for update</th>
                 </tr>
             </thead>
             <tbody>
                 {% for memo in memos %}
                 <tr>
-                    <th scope="row">{{ memo.id }}</th>
-                    <td>{{ memo.content }}</td>
+                    <div>
+                        <th scope="row">{{ memo.id }}</th>
+                        <td>{{ memo.content }}</td>
+                        <td>
+                            <button type="button" class="btn btn-primary" onclick="delete_method('/form/memo/{{ memo.id }}')">Delete</button>
+                        </td>    
+                    </div>
+                    <div>
+                        <td>
+                            <input type="text" name="content" id="update_content{{ memo.id }}" class="form-control">
+                        </td>
+                        <td>
+                            <button type="button" class="btn btn-primary" onclick="update_method('update_content{{ memo.id }}', '/form/memo/{{ memo.id }}')">Update</button>
+                        </td>
+                    </div>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -49,5 +62,37 @@
         integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx"
         crossorigin="anonymous"></script>
 </body>
+
+<script type="text/javascript" >
+    function post_method(body, url) {
+        let textbox = document.getElementById(body);
+        let value = textbox.value;
+
+        let xhr = new XMLHttpRequest();
+        xhr.open('POST', url);
+        xhr.send("content=" + value);
+
+        //location.reload(true);
+    }
+
+    function delete_method(url) {
+        let xhr = new XMLHttpRequest();
+        xhr.open('DELETE', url);
+        xhr.send();
+
+        //location.reload(true);
+      }
+
+      function update_method(body, url) {
+        let textbox = document.getElementById(body);
+        let value = textbox.value;
+
+        let xhr = new XMLHttpRequest();
+        xhr.open('PUT', url);
+        xhr.send("content=" + value);
+
+        //location.reload(true);
+      }
+</script>
 
 </html>

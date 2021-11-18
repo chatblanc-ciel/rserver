@@ -154,6 +154,8 @@ pub enum HttpError {
     UndifineMethod,
     RequestIsBroken,
     FailGetControl,
+    InternalErrorDiesel,
+    InternalErrorTera,
 }
 impl Display for HttpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -161,6 +163,8 @@ impl Display for HttpError {
             Self::UndifineMethod => write!(f, "Http request method is undifined."),
             Self::RequestIsBroken => write!(f, "Http request is broken so can't deserialize."),
             Self::FailGetControl => write!(f, "Http get request is failed."),
+            Self::InternalErrorDiesel => write!(f, "Internal database error occured."),
+            Self::InternalErrorTera => write!(f, "Internal template engine error occured."),
         }
     }
 }

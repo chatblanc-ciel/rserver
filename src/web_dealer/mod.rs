@@ -6,12 +6,19 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
-mod dealer_error;
-mod http_def;
+pub mod dealer_error;
+pub mod http_def;
 
 use crate::web_dealer::http_def::*;
 
 use self::dealer_error::DealerError;
+
+use diesel::{
+    prelude::*,
+    r2d2::{self, ConnectionManager},
+    sqlite::SqliteConnection,
+};
+use tera::{Context, Tera};
 
 /// # WebDealer
 ///
@@ -23,8 +30,8 @@ where
         + FnMut(
             HttpRequest,
             String,
-            Option<String>,
-            Option<String>,
+            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Sync
         + Send
@@ -33,6 +40,10 @@ where
     _listener: Arc<TcpListener>,
     _worker: JoinHandle<()>,
     _route: Arc<Vec<Route<F>>>,
+    _resource: Arc<(
+        Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+        Option<Tera>,
+    )>,
 }
 impl<F> WebDealer<F>
 where
@@ -40,8 +51,8 @@ where
         + FnMut(
             HttpRequest,
             String,
-            Option<String>,
-            Option<String>,
+            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Sync
         + Send
@@ -56,7 +67,14 @@ where
     /// # Error
     ///
     /// Can not connect to listening address.
-    pub fn new<A>(addr: A, route: Vec<Route<F>>) -> Result<Self, DealerError>
+    pub fn new<A>(
+        addr: A,
+        route: Vec<Route<F>>,
+        resource: (
+            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<Tera>,
+        ),
+    ) -> Result<Self, DealerError>
     where
         A: ToSocketAddrs,
     {
@@ -75,12 +93,14 @@ where
         let _listener = Arc::clone(&listener);
         let _route = Arc::new(route);
         let route_cp = Arc::clone(&_route);
+        let _resource = Arc::new(resource);
+        let resource_cp = Arc::clone(&_resource);
 
         let thread = thread::spawn(move || {
             for stream in listener.incoming() {
                 let stream = stream.unwrap();
 
-                Self::handle_connection(stream, route_cp.clone());
+                Self::handle_connection(stream, route_cp.clone(), resource_cp.clone());
             }
         });
 
@@ -88,12 +108,20 @@ where
             _listener,
             _worker: thread,
             _route,
+            _resource,
         })
     }
 
     /// analyze Http Request
     ///
-    fn handle_connection(mut stream: TcpStream, route: Arc<Vec<Route<F>>>) {
+    fn handle_connection(
+        mut stream: TcpStream,
+        route: Arc<Vec<Route<F>>>,
+        resource: Arc<(
+            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<Tera>,
+        )>,
+    ) {
         let mut buffer = [0; 1024];
         let _ = stream.read(&mut buffer).unwrap();
         println!("{}", String::from_utf8_lossy(&buffer));
@@ -114,6 +142,21 @@ where
             .cloned()
             .filter(|r| r.method == HttpRequestMethod::Get)
             .collect::<Vec<Route<F>>>();
+        let post_routing = route
+            .iter()
+            .cloned()
+            .filter(|r| r.method == HttpRequestMethod::Post)
+            .collect::<Vec<Route<F>>>();
+        let delete_routing = route
+            .iter()
+            .cloned()
+            .filter(|r| r.method == HttpRequestMethod::Delete)
+            .collect::<Vec<Route<F>>>();
+        let put_routing = route
+            .iter()
+            .cloned()
+            .filter(|r| r.method == HttpRequestMethod::Put)
+            .collect::<Vec<Route<F>>>();
 
         let response = match &request.method {
             HttpRequestMethod::Get => {
@@ -122,17 +165,99 @@ where
                     if route_dir.req_dir == request.target {
                         if let Some(res) = route_dir.res_dir {
                             let serve = &mut route_dir.service;
-                            result = serve(request.clone(), res, None, None)
+                            result = serve(
+                                request.clone(),
+                                res,
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
                         } else {
                             let serve = &mut route_dir.service;
-                            result = serve(request.clone(), request.target.clone(), None, None)
+                            result = serve(
+                                request.clone(),
+                                request.target.clone(),
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
                         }
                     }
                 }
                 result
             }
             HttpRequestMethod::Post => {
-                unimplemented!()
+                let mut result = Err(HttpError::FailGetControl);
+                for mut route_dir in post_routing {
+                    if route_dir.req_dir == request.target {
+                        if let Some(res) = route_dir.res_dir {
+                            let serve = &mut route_dir.service;
+                            result = serve(
+                                request.clone(),
+                                res,
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
+                        } else {
+                            let serve = &mut route_dir.service;
+                            result = serve(
+                                request.clone(),
+                                request.target.clone(),
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
+                        }
+                    }
+                }
+                result
+            }
+            HttpRequestMethod::Delete => {
+                let mut result = Err(HttpError::FailGetControl);
+                for mut route_dir in delete_routing {
+                    if request.target.contains(&route_dir.req_dir) {
+                        if let Some(res) = route_dir.res_dir {
+                            let serve = &mut route_dir.service;
+                            result = serve(
+                                request.clone(),
+                                res,
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
+                        } else {
+                            let serve = &mut route_dir.service;
+                            result = serve(
+                                request.clone(),
+                                request.target.clone(),
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
+                        }
+                    }
+                }
+                result
+            }
+            HttpRequestMethod::Put => {
+                let mut result = Err(HttpError::FailGetControl);
+                for mut route_dir in put_routing {
+                    if request.target.contains(&route_dir.req_dir) {
+                        if let Some(res) = route_dir.res_dir {
+                            let serve = &mut route_dir.service;
+                            result = serve(
+                                request.clone(),
+                                res,
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
+                        } else {
+                            let serve = &mut route_dir.service;
+                            result = serve(
+                                request.clone(),
+                                request.target.clone(),
+                                resource.clone().0.clone(),
+                                resource.clone().1.clone(),
+                            )
+                        }
+                    }
+                }
+                result
             }
             _ => Err(HttpError::UndifineMethod),
         };
@@ -178,8 +303,8 @@ where
 pub fn get_service(
     request: HttpRequest,
     route_dir: String,
-    _: Option<String>,
-    _: Option<String>,
+    _: Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+    _: Option<Tera>,
 ) -> Result<HttpResponse, HttpError> {
     let mut filename = String::from(".");
     filename += &route_dir;
@@ -195,14 +320,21 @@ pub fn get_service(
     })
 }
 
+pub type RouteService = fn(
+    HttpRequest,
+    String,
+    Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+    Option<Tera>,
+) -> Result<HttpResponse, HttpError>;
+
 #[derive(Debug, Clone)]
 pub struct Route<F>
 where
     F: FnMut(
             HttpRequest,
             String,
-            Option<String>,
-            Option<String>,
+            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Clone,
 {
@@ -217,8 +349,8 @@ where
         + FnMut(
             HttpRequest,
             String,
-            Option<String>,
-            Option<String>,
+            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Clone,
 {
@@ -235,3 +367,21 @@ where
         })
     }
 }
+
+pub trait Resource {}
+#[derive(Debug)]
+pub struct WebResource<T: ?Sized>(Arc<T>);
+impl<T> WebResource<T> {
+    pub fn new(data: T) -> WebResource<T> {
+        Self(Arc::new(data))
+    }
+
+    pub fn get_ref(&self) -> &T {
+        self.0.as_ref()
+    }
+
+    pub fn into_inner(self) -> Arc<T> {
+        self.0
+    }
+}
+impl<T: ?Sized + 'static> Resource for WebResource<T> {}
