@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::Display;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum HttpRequestMethod {
     Get,
     Post,
@@ -107,7 +107,9 @@ impl TryInto<HttpRequest> for String {
     }
 }
 
-#[derive(Debug, Clone)]
+pub trait Response {}
+
+#[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum HttpResponseState {
     Complete, // `Ok` is Reserved word in Rust.
     NotFound,
@@ -134,6 +136,7 @@ pub struct HttpResponse {
     pub ver: String,
     pub body: String,
 }
+impl Response for HttpResponse {}
 impl From<HttpResponse> for String {
     fn from(res: HttpResponse) -> Self {
         format!(
@@ -151,6 +154,8 @@ pub enum HttpError {
     UndifineMethod,
     RequestIsBroken,
     FailGetControl,
+    InternalErrorDiesel,
+    InternalErrorTera,
 }
 impl Display for HttpError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -158,6 +163,8 @@ impl Display for HttpError {
             Self::UndifineMethod => write!(f, "Http request method is undifined."),
             Self::RequestIsBroken => write!(f, "Http request is broken so can't deserialize."),
             Self::FailGetControl => write!(f, "Http get request is failed."),
+            Self::InternalErrorDiesel => write!(f, "Internal database error occured."),
+            Self::InternalErrorTera => write!(f, "Internal template engine error occured."),
         }
     }
 }
