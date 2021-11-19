@@ -1,6 +1,11 @@
 <!DOCTYPE html>
 <html lang="jp">
-
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Document</title>
+</head>
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -72,7 +77,7 @@
         xhr.open('POST', url);
         xhr.send("content=" + value);
 
-        //location.reload(true);
+        window.location.href = '/form.html';
     }
 
     function delete_method(url) {
@@ -80,7 +85,7 @@
         xhr.open('DELETE', url);
         xhr.send();
 
-        //location.reload(true);
+        window.location.href = '/form.html';
       }
 
       function update_method(body, url) {
@@ -91,7 +96,7 @@
         xhr.open('PUT', url);
         xhr.send("content=" + value);
 
-        //location.reload(true);
+        window.location.href = '/form.html';
       }
 </script>
 
