@@ -1,6 +1,6 @@
 table! {
     memos (id) {
-        id -> Integer,
-        content -> Text,
+        id -> Int4,
+        content -> Varchar,
     }
 }

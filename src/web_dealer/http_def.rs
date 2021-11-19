@@ -1,5 +1,11 @@
+use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Display;
+
+#[derive(Debug, Clone, PartialOrd, PartialEq, std::cmp::Eq, Hash)]
+pub enum RequestHeaderKind {
+    MessageLength,
+}
 
 #[derive(Debug, Clone, PartialOrd, PartialEq)]
 pub enum HttpRequestMethod {
@@ -53,6 +59,7 @@ pub struct HttpRequest {
     pub method: HttpRequestMethod,
     pub target: String,
     pub ver: String,
+    pub header: HashMap<RequestHeaderKind, String>,
     pub body: String,
     pub remained_header: String,
 }
@@ -62,6 +69,7 @@ impl Default for HttpRequest {
             method: Default::default(),
             target: Default::default(),
             ver: Default::default(),
+            header: HashMap::new(),
             body: Default::default(),
             remained_header: Default::default(),
         }
@@ -71,6 +79,8 @@ impl TryInto<HttpRequest> for String {
     type Error = HttpError;
 
     fn try_into(self) -> Result<HttpRequest, Self::Error> {
+        let mut header = HashMap::new();
+
         // bodyとheaderの分解
         let mut request = self
             .split("\r\n\r\n")
@@ -97,10 +107,29 @@ impl TryInto<HttpRequest> for String {
             return Err(HttpError::RequestIsBroken);
         }
 
+        for line in request.iter().skip(1) {
+            let content = line.split(':').collect::<Vec<&str>>();
+
+            match content.get(0).ok_or(HttpError::RequestIsBroken)?.trim() {
+                "Content-Length" => {
+                    header.insert(
+                        RequestHeaderKind::MessageLength,
+                        content
+                            .get(1)
+                            .ok_or(HttpError::RequestIsBroken)?
+                            .trim()
+                            .to_string(),
+                    );
+                }
+                _ => {}
+            }
+        }
+
         Ok(HttpRequest {
             method: request_first[0].clone().try_into()?,
             target: request_first[1].clone(),
             ver: request_first[2].clone(),
+            header,
             body,
             ..Default::default()
         })

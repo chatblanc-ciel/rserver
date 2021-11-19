@@ -12,9 +12,9 @@ mod model;
 mod schema;
 
 use diesel::{
+    pg::PgConnection,
     prelude::*,
     r2d2::{self, ConnectionManager},
-    sqlite::SqliteConnection,
 };
 use dotenv::dotenv;
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct FormParams {
 fn form(
     request: HttpRequest,
     _: String,
-    pool: Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+    pool: Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
     tmpl: Option<Tera>,
 ) -> Result<HttpResponse, HttpError> {
     let mut ctx = Context::new();
@@ -56,16 +56,27 @@ fn form(
 fn memo_form(
     request: HttpRequest,
     _: String,
-    pool: Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+    pool: Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
     tmpl: Option<Tera>,
 ) -> Result<HttpResponse, HttpError> {
-    let content = request.body.trim().split("=").collect::<Vec<&str>>();
+    let (message_body, _) = request.body.split_at(
+        request
+            .header
+            .get(&RequestHeaderKind::MessageLength)
+            .ok_or(HttpError::RequestIsBroken)?
+            .trim()
+            .parse()
+            .or(Err(HttpError::RequestIsBroken))?,
+    );
+    let content = message_body.trim().split("=").collect::<Vec<&str>>();
     let new_memo = crate::model::NewMemo {
         content: content
             .get(1)
             .ok_or(HttpError::RequestIsBroken)?
+            .trim()
             .to_string(),
     };
+
     let conn = pool
         .ok_or(HttpError::InternalErrorDiesel)?
         .get()
@@ -93,8 +104,8 @@ fn memo_form(
 fn memo_delete(
     request: HttpRequest,
     _: String,
-    pool: Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
-    tmpl: Option<Tera>,
+    pool: Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
+    _: Option<Tera>,
 ) -> Result<HttpResponse, HttpError> {
     // parse request URL
     let target = request.target.trim().split("?").collect::<Vec<&str>>();
@@ -132,8 +143,8 @@ fn memo_delete(
 fn memo_update(
     request: HttpRequest,
     _: String,
-    pool: Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
-    tmpl: Option<Tera>,
+    pool: Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
+    _: Option<Tera>,
 ) -> Result<HttpResponse, HttpError> {
     // parse request URL
     let target = request.target.trim().split("?").collect::<Vec<&str>>();
@@ -149,13 +160,24 @@ fn memo_update(
         .trim()
         .parse()
         .or(Err(HttpError::RequestIsBroken))?;
-    let content = request.body.trim().split("=").collect::<Vec<&str>>();
+
+    // parse request contents
+    let (message_body, _) = request.body.split_at(
+        request
+            .header
+            .get(&RequestHeaderKind::MessageLength)
+            .ok_or(HttpError::RequestIsBroken)?
+            .trim()
+            .parse()
+            .or(Err(HttpError::RequestIsBroken))?,
+    );
+    let content = message_body.trim().split("=").collect::<Vec<&str>>();
     let content = content
         .get(1)
         .ok_or(HttpError::RequestIsBroken)?
         .to_string();
 
-    // delete database item
+    // update database item
     let conn = pool
         .as_ref()
         .ok_or(HttpError::InternalErrorDiesel)?
@@ -184,9 +206,7 @@ fn main() {
     let dotenv_database_url = std::env::var(database_url).expect("DATABASE_URL must be set");
     let db_pool = r2d2::Pool::builder()
         .max_size(4)
-        .build(ConnectionManager::<SqliteConnection>::new(
-            &dotenv_database_url,
-        ))
+        .build(ConnectionManager::<PgConnection>::new(&dotenv_database_url))
         .expect("failed to create db connection pool");
 
     let addr = String::from("0.0.0.0:8000"); // In docker container
@@ -197,7 +217,7 @@ fn main() {
             fn(
                 HttpRequest,
                 String,
-                Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+                Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
                 Option<Tera>,
             ) -> Result<HttpResponse, HttpError>,
         >,

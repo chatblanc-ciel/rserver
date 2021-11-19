@@ -21,7 +21,10 @@ RUN apt-get -y update && \
 		apt-utils \
     	git \
     	ca-certificates \
-    	sqlite3 \
+		default-jre \
+		default-jdk \
+		nodejs npm \
+		postgresql \
     && apt-get autoremove -y \
     && apt-get clean -y
 
@@ -30,6 +33,12 @@ RUN npm install -g n \
 	&& npm update -g \
 	&& n stable \
 	&& apt-get purge -y nodejs npm
+
+# data base preset
+USER postgres
+RUN /etc/init.d/postgresql start && \
+    psql --command "CREATE USER root with SUPERUSER CREATEDB CREATEROLE REPLICATION BYPASSRLS LOGIN PASSWORD 'admin';"
+USER root
 
 # コンテナ側にworkdirという名前の作業ディレクトリを作り、
 # コンテナ起動時に作業ディレクトリに移動する

@@ -14,9 +14,9 @@ use crate::web_dealer::http_def::*;
 use self::dealer_error::DealerError;
 
 use diesel::{
+    pg::PgConnection,
     prelude::*,
     r2d2::{self, ConnectionManager},
-    sqlite::SqliteConnection,
 };
 use tera::{Context, Tera};
 
@@ -30,7 +30,7 @@ where
         + FnMut(
             HttpRequest,
             String,
-            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
             Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Sync
@@ -41,7 +41,7 @@ where
     _worker: JoinHandle<()>,
     _route: Arc<Vec<Route<F>>>,
     _resource: Arc<(
-        Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+        Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
         Option<Tera>,
     )>,
 }
@@ -51,7 +51,7 @@ where
         + FnMut(
             HttpRequest,
             String,
-            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
             Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Sync
@@ -71,7 +71,7 @@ where
         addr: A,
         route: Vec<Route<F>>,
         resource: (
-            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
             Option<Tera>,
         ),
     ) -> Result<Self, DealerError>
@@ -118,7 +118,7 @@ where
         mut stream: TcpStream,
         route: Arc<Vec<Route<F>>>,
         resource: Arc<(
-            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
             Option<Tera>,
         )>,
     ) {
@@ -303,7 +303,7 @@ where
 pub fn get_service(
     request: HttpRequest,
     route_dir: String,
-    _: Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+    _: Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
     _: Option<Tera>,
 ) -> Result<HttpResponse, HttpError> {
     let mut filename = String::from(".");
@@ -323,7 +323,7 @@ pub fn get_service(
 pub type RouteService = fn(
     HttpRequest,
     String,
-    Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+    Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
     Option<Tera>,
 ) -> Result<HttpResponse, HttpError>;
 
@@ -333,7 +333,7 @@ where
     F: FnMut(
             HttpRequest,
             String,
-            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
             Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Clone,
@@ -349,7 +349,7 @@ where
         + FnMut(
             HttpRequest,
             String,
-            Option<r2d2::Pool<ConnectionManager<SqliteConnection>>>,
+            Option<r2d2::Pool<ConnectionManager<PgConnection>>>,
             Option<Tera>,
         ) -> Result<HttpResponse, HttpError>
         + Clone,
